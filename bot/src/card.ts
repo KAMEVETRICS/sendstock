@@ -61,8 +61,21 @@ export function pendingCard(tip: TipRow, market: MarketStatus | null, payWindowM
   return lines.join("\n");
 }
 
-export function escrowedCard(tip: TipRow): string {
-  return [headline(tip), "", `✅ Sent. ${who(tip)}, tap <b>Claim</b> to get your shares. No seed phrase, no gas.`].join("\n");
+export function escrowedCard(tip: TipRow, direct = false): string {
+  const next = direct
+    ? `✅ Paid. ${who(tip)} can claim it now.`
+    : `✅ Sent. ${who(tip)}, tap <b>Claim</b> to get your shares. No seed phrase, no gas.`;
+  return [headline(tip), "", next].join("\n");
+}
+
+/** What the recipient sees (or what the sender shares) for a tip sent in a DM. */
+export function claimInvite(tip: TipRow, html = true): string {
+  const b = (s: string) => (html ? `<b>${escapeHtml(s)}</b>` : s);
+  return [
+    `🎁 ${b(tip.sender_name)} sent you ${b(`${usd(tip.amount_usd)} of ${tip.company_name}`)} (≈ ${shares(tip.amount_usd / tip.share_price)} ${tip.ticker} shares) with SendStock.`,
+    "",
+    "Open the link, sign in with Telegram, and tap Claim. No seed phrase, no gas.",
+  ].join("\n");
 }
 
 export function claimedCard(tip: TipRow): string {

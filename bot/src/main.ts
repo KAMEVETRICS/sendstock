@@ -17,7 +17,8 @@ const rwa = new RwaClient();
 const { bot, refreshCard, expireStaleTips } = createBot(config, store, rwa);
 
 await bot.api.setMyCommands([
-  { command: "tip", description: "Tip someone a US stock: /tip @user 5 NVDA" },
+  { command: "send", description: "Send a friend a US stock privately: /send 5 NVDA" },
+  { command: "tip", description: "Tip someone in a group: /tip @user 5 NVDA" },
   { command: "help", description: "How SendStock works" },
 ]);
 

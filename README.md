@@ -1,74 +1,58 @@
 # SendStock
 
-**Tip friends real US stocks, right inside Telegram.**
+Tip your friends real US stocks, right in Telegram.
 
-`/tip @alice 5 NVDA` in any Telegram group sends Alice $5 of Nvidia as a real tokenized stock (NVDAB, a Binance bStock on BNB Chain). She taps **Claim**, gets a wallet from her Telegram login (no seed phrase), and receives the shares without paying gas.
+Message the bot `/send 5 NVDA`, pick a friend, and pay. Your friend gets $5 of Nvidia as a real tokenized stock (NVDAB, a Binance bStock on BNB Chain). They tap **Claim**, and it lands in their own wallet. No seed phrase, no gas.
 
-- **Live:** [sendstock.website](https://sendstock.website) · Telegram bot [@Sendstockbot](https://t.me/Sendstockbot)
-- **Contract (BSC mainnet):** TipEscrow [`0xc6196B047901214437D9A4aB99024bc311050Ca1`](https://bscscan.com/address/0xc6196B047901214437D9A4aB99024bc311050Ca1)
-- **Built for:** BNB Hack: Tokenized Stocks Edition, main track
+In a group, `/tip @alice 5 NVDA` does the same thing in public.
+
+- **Try it:** [@Sendstockbot](https://t.me/Sendstockbot) · [sendstock.website](https://sendstock.website)
+- **Contract (BSC mainnet):** [`0xc6196B047901214437D9A4aB99024bc311050Ca1`](https://bscscan.com/address/0xc6196B047901214437D9A4aB99024bc311050Ca1)
+- Built for BNB Hack: Tokenized Stocks Edition.
 
 ![SendStock](assets/botfather-640x360.png)
 
 ## How it works
 
-```
-Telegram group ──/tip @alice 5 NVDA──▶ Bot (grammY)
-                                        │  RWA Data API: ticker → bStock, price, company, market session
-                                        ▼
-Sender ──Confirm & pay──▶ Mini App (Privy wallet from Telegram login)
-                                        │  one tx: TipEscrow.tipWithSwap(USDT → NVDAB via PancakeSwap v3)
-                                        ▼
-                                  TipEscrow (BSC mainnet) holds the stock
-                                        ▲
-Recipient ──Claim──▶ Mini App ── server checks Telegram identity ──▶ Binance Agentic Wallet
-                                                                     contract-call claim(tipId, wallet)
-                                                                     (operator pays the gas)
-```
+1. **You tip.** `/send` in a DM (pick a friend from your contacts) or `/tip` in a group. The bot looks up the stock with Binance's RWA Data API and posts a card with the price and how many shares that is.
+2. **You pay.** In the Mini App, one transaction swaps your USDT into the stock on PancakeSwap v3 and locks it in our escrow contract.
+3. **They get a message.** The bot DMs your friend a claim link. If they have never opened the bot, you get a "Share with..." button to send it yourself.
+4. **They claim.** Their wallet comes from their Telegram login (Privy). Our Binance Agentic Wallet sends the claim and pays the gas.
+5. **Nobody claims?** The tip goes back to you after 7 days.
 
-1. **Tip:** the bot resolves the ticker to a bStock with the Binance Web3 **RWA Data API**, prices it, and posts a tip card showing the shares, price and US market session ("US market closed, still a real stock on-chain 24/7").
-2. **Pay:** the sender opens the Mini App. The server quotes every PancakeSwap v3 fee tier and builds one `tipWithSwap` transaction. The escrow pulls USDT, swaps through an allow-listed router, checks `minOut` against what it actually received, and holds the stock.
-3. **Verify:** the server reads the receipt and only accepts a `Tipped` event from our escrow, for this tip (bound by a per-tip hash), for the right stock and amount. Payments can't be replayed across tips.
-4. **Claim:** Telegram's signed `initData` proves who the recipient is. The bot's **Binance Agentic Wallet** (the escrow's operator) calls `claim` through `baw contract-call` preview → execute, so recipients never need gas. A watcher settles claims from on-chain state, which covers Agentic Wallet calls that wait for approval in the Binance App.
-5. **Refund:** unclaimed tips can be returned to the sender after 7 days.
+It works on weekends too. The US market might be closed, but the stock still moves on-chain.
 
-## What's in the repo
+## Stack
 
-| Path | What |
-|---|---|
-| `contracts/` | `TipEscrow.sol` (OpenZeppelin, Hardhat 3), 21 unit tests + a BSC mainnet-fork test (real USDT → NVDAB via PancakeSwap, then claim), deploy script |
-| `bot/` | Telegram bot (grammY), Mini App API (Hono), RWA Data API client, Agentic Wallet operator (`baw` CLI) with keep-alive, SQLite store, end-to-end test (`scripts/e2e-local.ts`) |
-| `app/` | Telegram Mini App (Vite + React + Privy): Pay, Claim, My tips |
+- **Binance Web3 RWA Data API:** ticker lookup, price, company info, market status
+- **Binance Agentic Wallet:** escrow operator, sends claims (`baw contract-call`)
+- **PancakeSwap v3:** picks the cheapest pool for each tip
+- **TipEscrow** (Solidity, Hardhat 3): 21 unit tests, plus a test on a copy of mainnet with real USDT and NVDAB
+- **Telegram bot** (grammY), **Mini App** (React + Privy), **API** (Hono)
 
-## Binance Web3 / BNB stack used
+## Repo
 
-- **RWA Data API:** bStock list (87 tokens), company profile + proof-of-collateral link, market status, on-chain price and share multiplier.
-- **Binance Agentic Wallet** (`baw` 1.10): escrow operator, gasless claims through Developer Mode `contract-call`, session keep-alive.
-- **BNB Chain:** BSC mainnet, bStocks, PancakeSwap v3 (best fee tier picked per tip).
+- `contracts/`: escrow, tests, deploy script
+- `bot/`: Telegram bot, API, Agentic Wallet operator
+- `app/`: the Mini App
 
-## Run it
+## Run it yourself
 
-Requirements: Node 22.13+ (built-in `node:sqlite`), a Telegram bot token, a Privy app (Telegram login + seamless auth, Ethereum embedded wallets on login), and an Agentic Wallet signed in with Developer Mode on.
+You need Node 22.13+, a Telegram bot token, a Privy app with Telegram login, and an Agentic Wallet with Developer Mode on.
 
 ```bash
 npm install
-cp .env.example .env          # fill in TELEGRAM_BOT_TOKEN, VITE_PRIVY_APP_ID, ESCROW_ADDRESS, OPERATOR_ADDRESS
-cd contracts && npx hardhat test solidity     # unit + mainnet-fork tests
-cd ../bot && npm start                        # bot + API on :8787
-cd ../app && npm run dev                      # Mini App on :5173 (?mock=pay|claim|list previews without Telegram)
+cp .env.example .env                        # fill it in
+cd contracts && npx hardhat test solidity   # tests
+cd ../bot && npm start                      # bot + API
+cd ../app && npm run dev                    # Mini App (add ?mock=pay to preview outside Telegram)
 ```
 
-Deploy your own escrow with `cd contracts && npx tsx --env-file=../.env scripts/deploy.ts` (dry run), then add `--yes`.
+## Good to know
 
-## Trust model and limits
+- The escrow's operator (our Agentic Wallet) decides who can claim, based on Telegram's signed login. Senders can always take back unclaimed tips.
+- Spot only. No leverage.
 
-- The escrow **operator** (the Agentic Wallet) decides who may claim a tip, based on Telegram's signed login checked by the server. The owner can replace the operator. Senders can always recover unclaimed tips after expiry.
-- Spot only: tips are swaps into bStocks. No leverage, no perps.
-- Agentic Wallet Developer Mode expires after 7 days and must be turned back on in the Binance App. The bot logs a warning when that happens.
+## Next
 
-## Next steps
-
-- Link email to the Telegram account as a wallet backup.
-- Pay from an existing wallet (Binance Web3 Wallet / MetaMask via WalletConnect).
-- Group "tip jar" run by the Agentic Wallet (`baw market-order swap` + `tip`).
-- Route swaps through the Binance Trading API aggregator.
+Email backup for wallets, paying from an existing wallet, and a group tip jar run by the Agentic Wallet.

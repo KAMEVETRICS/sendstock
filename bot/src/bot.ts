@@ -3,7 +3,7 @@ import type { User } from "grammy/types";
 import type { Config } from "./config.ts";
 import type { Store, TipRow } from "./db.ts";
 import type { RwaClient } from "./rwa.ts";
-import { cancelledCard, claimedCard, escrowedCard, pendingCard } from "./card.ts";
+import { cancelledCard, claimedCard, claimInvite, escrowedCard, escapeHtml, pendingCard } from "./card.ts";
 import { parseTipArgs } from "./parse.ts";
 
 export function displayName(u: Pick<User, "first_name" | "last_name">): string {
@@ -47,9 +47,35 @@ export function createBot(config: Config, store: Store, rwa: RwaClient) {
           .url(`Confirm & pay $${tip.amount_usd.toFixed(2)}`, miniAppLink(`pay_${tip.id}`))
           .text("Cancel", `cancel:${tip.id}`);
       case "escrowed":
+        if (isDirect(tip)) return new InlineKeyboard().url(`Share with ${firstWord(tip.recipient_name)}`, shareLink(tip));
         return new InlineKeyboard().url("🎁 Claim", miniAppLink(`claim_${tip.id}`));
       default:
         return undefined;
+    }
+  }
+
+  /** A tip started in the sender's DM with the bot (private chat id == user id). */
+  const isDirect = (tip: TipRow) => tip.chat_id === tip.sender_tg_id;
+  const firstWord = (name: string) => name.replace(/^@/, "").split(" ")[0];
+  const shareLink = (tip: TipRow) =>
+    `https://t.me/share/url?url=${encodeURIComponent(miniAppLink(`claim_${tip.id}`))}&text=${encodeURIComponent(claimInvite(tip, false))}`;
+
+  /** After a DM tip is paid: message the friend, or hand the sender a share button if we can't. */
+  async function notifyRecipient(tip: TipRow): Promise<void> {
+    if (!tip.recipient_tg_id) return;
+    try {
+      await bot.api.sendMessage(tip.recipient_tg_id, claimInvite(tip), {
+        parse_mode: "HTML",
+        reply_markup: new InlineKeyboard().url("🎁 Claim", miniAppLink(`claim_${tip.id}`)),
+      });
+      await bot.api.sendMessage(tip.chat_id, `📬 I've messaged ${escapeHtml(tip.recipient_name)} with the claim link.`, { parse_mode: "HTML" });
+    } catch {
+      // Bots can't start a chat with someone who has never opened them.
+      await bot.api.sendMessage(
+        tip.chat_id,
+        `${escapeHtml(tip.recipient_name)} hasn't opened @${bot.botInfo.username} yet, so I can't message them. Tap below to send them the claim link yourself.`,
+        { parse_mode: "HTML", reply_markup: new InlineKeyboard().url(`Share with ${firstWord(tip.recipient_name)}`, shareLink(tip)) },
+      );
     }
   }
 
@@ -58,7 +84,7 @@ export function createBot(config: Config, store: Store, rwa: RwaClient) {
     const tip = store.tip(tipId);
     if (!tip?.message_id) return;
     const text =
-      tip.status === "escrowed" ? escrowedCard(tip)
+      tip.status === "escrowed" ? escrowedCard(tip, isDirect(tip))
       : tip.status === "claimed" ? claimedCard(tip)
       : tip.status === "cancelled" || tip.status === "refunded" ? cancelledCard(tip, reason)
       : null;
@@ -69,9 +95,9 @@ export function createBot(config: Config, store: Store, rwa: RwaClient) {
         reply_markup: keyboardFor(tip),
       });
     } catch (e) {
-      if (e instanceof GrammyError && e.description.includes("message is not modified")) return;
-      throw e;
+      if (!(e instanceof GrammyError && e.description.includes("message is not modified"))) throw e;
     }
+    if (tip.status === "escrowed" && isDirect(tip)) await notifyRecipient(tip);
   }
 
   // Remember everyone who speaks, so "@username" tips can be matched to a Telegram id.
@@ -88,6 +114,8 @@ export function createBot(config: Config, store: Store, rwa: RwaClient) {
       [
         "🎁 <b>SendStock</b>: tip friends real US stocks on BNB Chain.",
         "",
+        "Privately: <code>/send 5 NVDA</code>, then pick a friend.",
+        "",
         "In a group:",
         "• <code>/tip @alice 5 NVDA</code>",
         "• or reply to a message with <code>/tip 5 TSLA</code>",
@@ -100,7 +128,7 @@ export function createBot(config: Config, store: Store, rwa: RwaClient) {
 
   bot.command("tip", async (ctx) => {
     if (ctx.chat.type === "private") {
-      return ctx.reply("Tips happen in groups. Add me to a group and use /tip @friend 5 NVDA there.");
+      return ctx.reply("To send a stock privately, use /send 5 NVDA and pick a friend. In groups, use /tip @friend 5 NVDA.");
     }
     const sender = ctx.from;
     if (!sender) return;
@@ -124,10 +152,15 @@ export function createBot(config: Config, store: Store, rwa: RwaClient) {
       return ctx.reply("Thanks, but I can't hold stocks 🙂", { reply_parameters: { message_id: ctx.msgId } });
     }
 
+    await startTip(ctx, sender, recipient, amountUsd, ticker, ctx.msgId);
+  });
+
+  /** Looks up the stock, prices it, saves the tip and posts its card in the current chat. */
+  async function startTip(ctx: Context, sender: User, recipient: Recipient, amountUsd: number, ticker: string, replyTo?: number) {
     const stock = await rwa.resolve(ticker);
     if (!stock) {
       return ctx.reply(`I couldn't find a tokenized ${ticker} on BNB Chain. Try NVDA, TSLA, AAPL, SPY or MSFT.`, {
-        reply_parameters: { message_id: ctx.msgId },
+        reply_parameters: replyTo ? { message_id: replyTo } : undefined,
       });
     }
 
@@ -142,7 +175,7 @@ export function createBot(config: Config, store: Store, rwa: RwaClient) {
     }
 
     const tip = store.createTip({
-      chatId: ctx.chat.id,
+      chatId: ctx.chat!.id,
       senderTgId: sender.id,
       senderName: displayName(sender),
       recipientTgId: recipient.tgId,
@@ -159,9 +192,48 @@ export function createBot(config: Config, store: Store, rwa: RwaClient) {
 
     const sent = await ctx.reply(
       pendingCard(tip, market.status === "fulfilled" ? market.value : null, config.payWindowMinutes),
-      { parse_mode: "HTML", reply_markup: keyboardFor(tip), reply_parameters: { message_id: ctx.msgId } },
+      { parse_mode: "HTML", reply_markup: keyboardFor(tip), reply_parameters: replyTo ? { message_id: replyTo } : undefined },
     );
     store.setMessageId(tip.id, sent.message_id);
+  }
+
+  // ---- private tips: /send 5 NVDA in a DM, then pick a friend with Telegram's contact picker
+  const PICK_FRIEND = 1;
+  const pendingSends = new Map<number, { amountUsd: number; ticker: string; at: number }>();
+
+  bot.command("send", async (ctx) => {
+    if (ctx.chat.type !== "private") {
+      return ctx.reply(`To tip privately, message me directly: @${bot.botInfo.username}`);
+    }
+    const parsed = parseTipArgs(ctx.match, { min: config.minTipUsd, max: config.maxTipUsd });
+    if (!parsed.ok) return ctx.reply("Send /send 5 NVDA (dollars, then the stock) and I'll ask who it's for.");
+    pendingSends.set(ctx.from!.id, { amountUsd: parsed.args.amountUsd, ticker: parsed.args.ticker, at: Date.now() });
+    await ctx.reply(`Who should get ${parsed.args.amountUsd.toFixed(2)} of ${parsed.args.ticker}?`, {
+      reply_markup: {
+        keyboard: [[{ text: "👤 Choose a friend", request_users: { request_id: PICK_FRIEND, user_is_bot: false, max_quantity: 1, request_name: true, request_username: true } }]],
+        one_time_keyboard: true,
+        resize_keyboard: true,
+      },
+    });
+  });
+
+  bot.on("message:users_shared", async (ctx) => {
+    const shared = ctx.message.users_shared;
+    if (shared.request_id !== PICK_FRIEND || !ctx.from) return;
+    const pending = pendingSends.get(ctx.from.id);
+    pendingSends.delete(ctx.from.id);
+    if (!pending || Date.now() - pending.at > 15 * 60_000) {
+      return ctx.reply("Start with /send 5 NVDA, then pick a friend.", { reply_markup: { remove_keyboard: true } });
+    }
+    const friend = shared.users[0];
+    if (!friend) return;
+    if (friend.user_id === ctx.from.id) {
+      return ctx.reply("You can't tip yourself 🙂", { reply_markup: { remove_keyboard: true } });
+    }
+    const name = [friend.first_name, friend.last_name].filter(Boolean).join(" ") || (friend.username ? `@${friend.username}` : "your friend");
+    store.seeUser(friend.user_id, friend.username, name);
+    await ctx.reply(`Got it: ${name}.`, { reply_markup: { remove_keyboard: true } });
+    await startTip(ctx, ctx.from, { tgId: friend.user_id, username: friend.username ?? null, name }, pending.amountUsd, pending.ticker);
   });
 
   bot.callbackQuery(/^cancel:([A-Za-z0-9]+)$/, async (ctx) => {
