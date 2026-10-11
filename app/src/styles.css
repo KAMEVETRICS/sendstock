@@ -168,3 +168,5 @@ code { font-size: 14px; }
   .landing-bottom { grid-template-columns: 1fr 1fr; }
   .landing-bottom > :nth-child(2) { display: none; }
 }
+body:has(.landing) { background: #050505; }
+.landing { min-height: 100dvh; }

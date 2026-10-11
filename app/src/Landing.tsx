@@ -55,7 +55,7 @@ export function Landing() {
             <text x="470" y="700">SPY</text>
           </g>
         </svg>
-        <img className="landing-icon" src="/icon.svg" alt="SendStock" />
+        <img className="landing-icon" src="/mark.svg" alt="SendStock" />
       </section>
 
       <section className="landing-cta">
