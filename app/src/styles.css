@@ -132,3 +132,39 @@ code { font-size: 14px; }
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2.4s; } }
+
+/* ---- landing page (sendstock.website outside Telegram) ---- */
+.landing {
+  position: relative;
+  min-height: 100vh;
+  overflow: hidden;
+  background: #050505;
+  color: #f2f2f2;
+  display: grid;
+  grid-template-rows: auto 1fr auto auto;
+  padding: 20px 24px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+.landing .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; letter-spacing: 0.08em; line-height: 1.5; }
+.landing .dim { color: rgba(242, 242, 242, 0.5); }
+.landing-bnb { position: absolute; inset: 50% auto auto 50%; width: min(120vw, 1100px); transform: translate(-50%, -50%) rotate(-8deg); opacity: 0.07; filter: blur(1.5px); pointer-events: none; }
+.landing-grain { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(60% 50% at 50% 50%, rgba(255,255,255,0.05), transparent 70%), radial-gradient(40% 30% at 85% 20%, rgba(240,185,11,0.06), transparent 70%); }
+.landing-top, .landing-bottom { position: relative; display: grid; grid-template-columns: 1fr 2fr 2fr 1fr; gap: 16px; align-items: start; }
+.landing-bottom { grid-template-columns: 1fr 2fr 1fr; align-items: end; }
+.landing-bottom > :last-child, .landing-top > :last-child { text-align: right; }
+.landing-right { max-width: 360px; }
+.landing-center { position: relative; display: grid; place-items: center; min-height: 420px; }
+.landing-orbits { position: absolute; width: min(92vw, 640px); height: auto; animation: landing-spin 60s linear infinite; }
+.landing-icon { position: relative; width: clamp(96px, 16vw, 150px); filter: drop-shadow(0 0 40px rgba(240, 185, 11, 0.35)); }
+.landing-cta { position: relative; text-align: center; display: grid; gap: 12px; justify-items: center; margin: 8px 0 28px; }
+.landing-cta h1 { font-size: clamp(28px, 5vw, 48px); letter-spacing: -0.02em; }
+.landing-cta code { color: #f0b90b; }
+.landing-button { display: inline-block; margin-top: 6px; padding: 12px 22px; border-radius: 999px; background: #f0b90b; color: #050505; font-weight: 700; text-decoration: none; }
+@keyframes landing-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .landing-orbits { animation: none; } }
+@media (max-width: 640px) {
+  .landing-top { grid-template-columns: 1fr 1fr; }
+  .landing-top .landing-col, .landing-top .landing-right { display: none; }
+  .landing-bottom { grid-template-columns: 1fr 1fr; }
+  .landing-bottom > :nth-child(2) { display: none; }
+}

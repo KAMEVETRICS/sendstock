@@ -6,19 +6,13 @@ import { insideTelegram, mockMode, tg } from "./telegram";
 import { MockWalletProvider, PrivyWalletProvider } from "./wallet";
 import { ClaimScreen, MyTipsScreen, PayScreen } from "./screens";
 import { Notice, Screen } from "./ui";
+import { Landing } from "./Landing";
 import "./styles.css";
 
 tg.ready();
 
 function Route() {
-  if (!insideTelegram && !mockMode) {
-    return (
-      <Screen>
-        <h1>SendStock</h1>
-        <Notice>Open this from Telegram: tap a tip's button in your group chat.</Notice>
-      </Screen>
-    );
-  }
+  if (!insideTelegram && !mockMode) return <Landing />;
   const param = tg.startParam ?? "";
   const [action, id] = param.split("_", 2);
   if (action === "pay" && id) return <PayScreen tipId={id} />;
