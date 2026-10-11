@@ -32,6 +32,8 @@ export const tg = {
   initData: webApp?.initData ?? "",
   startParam:
     webApp?.initDataUnsafe.start_param ??
+    // web_app buttons in private chats open the URL directly, so the tip comes in as ?start=
+    new URLSearchParams(location.search).get("start") ??
     (mockMode === "pay" ? "pay_mockTip0001" : mockMode === "claim" ? "claim_mockTip0001" : null),
   ready() {
     webApp?.ready();

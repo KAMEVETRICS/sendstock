@@ -16,6 +16,8 @@ export const config = {
   telegramToken: required("TELEGRAM_BOT_TOKEN"),
   /** Short name of the Mini App registered with @BotFather (/newapp). */
   miniAppShortName: process.env.MINI_APP_SHORT_NAME ?? "app",
+  /** Public URL of the Mini App, for web_app buttons in private chats. */
+  miniAppUrl: process.env.MINI_APP_URL || "https://sendstock.website",
   /** Comma-separated DNS servers, for networks whose resolver blocks binance.com. */
   dnsServers: (process.env.DNS_SERVERS ?? "").split(",").map((s) => s.trim()).filter(Boolean),
   dbPath: process.env.DB_PATH ?? "stocktip.db",

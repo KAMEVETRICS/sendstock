@@ -43,8 +43,13 @@ export function createBot(config: Config, store: Store, rwa: RwaClient) {
   function keyboardFor(tip: TipRow): InlineKeyboard | undefined {
     switch (tip.status) {
       case "awaiting_payment":
+        if (isDirect(tip)) {
+          return new InlineKeyboard()
+            .webApp(`Confirm & pay ${tip.amount_usd.toFixed(2)}`, webAppUrl(`pay_${tip.id}`))
+            .text("Cancel", `cancel:${tip.id}`);
+        }
         return new InlineKeyboard()
-          .url(`Confirm & pay $${tip.amount_usd.toFixed(2)}`, miniAppLink(`pay_${tip.id}`))
+          .url(`Confirm & pay ${tip.amount_usd.toFixed(2)}`, miniAppLink(`pay_${tip.id}`))
           .text("Cancel", `cancel:${tip.id}`);
       case "escrowed":
         if (isDirect(tip)) return new InlineKeyboard().url(`Share with ${firstWord(tip.recipient_name)}`, shareLink(tip));
@@ -53,6 +58,9 @@ export function createBot(config: Config, store: Store, rwa: RwaClient) {
         return undefined;
     }
   }
+
+  /** Direct Mini App URL; the app reads ?start= when Telegram gives no start_param. */
+  const webAppUrl = (param: string) => `${config.miniAppUrl}/?start=${param}`;
 
   /** A tip started in the sender's DM with the bot (private chat id == user id). */
   const isDirect = (tip: TipRow) => tip.chat_id === tip.sender_tg_id;
@@ -66,7 +74,7 @@ export function createBot(config: Config, store: Store, rwa: RwaClient) {
     try {
       await bot.api.sendMessage(tip.recipient_tg_id, claimInvite(tip), {
         parse_mode: "HTML",
-        reply_markup: new InlineKeyboard().url("🎁 Claim", miniAppLink(`claim_${tip.id}`)),
+        reply_markup: new InlineKeyboard().webApp("🎁 Claim", webAppUrl(`claim_${tip.id}`)),
       });
       await bot.api.sendMessage(tip.chat_id, `📬 I've messaged ${escapeHtml(tip.recipient_name)} with the claim link.`, { parse_mode: "HTML" });
     } catch {
