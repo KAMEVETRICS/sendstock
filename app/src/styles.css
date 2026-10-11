@@ -170,3 +170,12 @@ code { font-size: 14px; }
 }
 body:has(.landing) { background: #050505; }
 .landing { min-height: 100dvh; }
+/* smaller centre: icon sits inside the orbits */
+.landing-orbits { width: min(80vw, 540px); }
+.landing-icon { width: clamp(52px, 9vw, 96px); filter: drop-shadow(0 0 24px rgba(240, 185, 11, 0.3)); }
+.landing-center { min-height: 360px; }
+@media (max-width: 640px) {
+  .landing-orbits { width: 82vw; }
+  .landing-icon { width: 56px; }
+  .landing-center { min-height: 300px; }
+}
