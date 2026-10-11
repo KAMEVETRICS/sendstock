@@ -1,0 +1,20 @@
+{
+  "name": "@stocktip/contracts",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "hardhat build",
+    "test": "hardhat test"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox-viem": "^5.0.7",
+    "@types/node": "^26.6.4",
+    "forge-std": "github:foundry-rs/forge-std#v1.10.0",
+    "hardhat": "^3.18.1",
+    "typescript": "^7.0.2",
+    "viem": "^2.57.3"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^5.6.1"
+  }
+}

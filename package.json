@@ -1,0 +1,10 @@
+{
+  "name": "stocktip",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "contracts",
+    "bot",
+    "app"
+  ]
+}
